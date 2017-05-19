@@ -18,11 +18,6 @@
             "Description": "COF Hardened AMI(https://pulse.kdc.capitalone.com/docs/DOC-80886)",
             "Type": "String"
         },
-        "IAMROLE": {
-            "Default": "arn:aws:iam::587550370132:role/IAMRole-Hackathon",
-            "Description": "IAM Instance Profile Role.",
-            "Type": "String"
-        },
         "AlertTopic": {
             "Default": "arn:aws:sns:us-east-1:587550370132:Hackathon",
             "Description": "Arn for SNS Topic to use for Alerts",
@@ -34,7 +29,7 @@
             "Type": "CommaDelimitedList"
         },
         "OwnerContact": {
-            "Default": "Stephen/Russell",
+            "Default": "arn:aws:sns:us-east-1:587550370132:Hackathon",
             "Description": "Who is the OwnerContact",
             "Type": "String"
         },
@@ -44,24 +39,9 @@
             "Type": "String"
         },
         "InstanceType": {
-            "AllowedValues": [
-                "t2.micro",
-                "t2.medium",
-                "m3.medium",
-        "m3.large",
-        "m3.xlarge",
-        "m4.large",
-        "m4.xlarge",
-        "m4.2xlarge"
-         ],
             "Default": "t2.micro",
             "Description": "Size of instance",
             "Type": "String"
-        },
-        "KeyPairName": {
-            "Default": "keypair-hackathon",
-            "Description": "Name of an existing EC2 KeyPair to enable SSH accessto the instances (use bastion KeyPair if available)",
-            "Type": "AWS::EC2::KeyPair::KeyName"
         },
         "SecurityGroups": {
             "Default": "sg-fb387b85",
@@ -78,7 +58,6 @@
             "Description": "Comma separate list of subnets (AT LEAST 3) to use for DB Tier",
             "Type": "CommaDelimitedList"
         },
-
         "InstanceName": {
             "Default": "dotify-ec2",
             "Description": "Name of instances in AWS",
@@ -104,16 +83,6 @@
             "Description": "Minimum size of Autoscaling group",
             "Type": "String"
         },
-        "ScheduledHours": {
-                "AllowedValues": [
-                "USDaytime",
-                "24x7",
-                "Offshore"
-            ],
-                "Default": "USDaytime",
-            "Description": "Scheduled Hours",
-            "Type": "String"
-        },
         "HealthCheck": {
             "Default": "TCP:22",
             "Description": "Heath Check for instances",
@@ -121,28 +90,6 @@
         }
     },
     "Resources": {
-        "ASGCpuHighAlarm": {
-            "Properties": {
-                "AlarmActions": [{
-                    "Ref": "ASGScaleUpPolicy"
-                }],
-                "AlarmDescription": "Scale up if CPU > 80% average over 5 minutes",
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [{
-                    "Name": "AutoScalingGroup",
-                    "Value": {
-                        "Ref": "ASG"
-                    }
-                }],
-                "EvaluationPeriods": 1,
-                "MetricName": "CPUUtilization",
-                "Namespace": "AWS/EC2",
-                "Period": 300,
-                "Statistic": "Average",
-                "Threshold": "80"
-            },
-            "Type": "AWS::CloudWatch::Alarm"
-        },
         "ASGScaleDownPolicy": {
             "Properties": {
                 "AdjustmentType": "ChangeInCapacity",
@@ -165,28 +112,6 @@
             },
             "Type": "AWS::AutoScaling::ScalingPolicy"
         },
-        "CPUAlarmLow": {
-            "Properties": {
-                "AlarmActions": [{
-                    "Ref": "ASGScaleDownPolicy"
-                }],
-                "AlarmDescription": "Scale-down if CPU < 70% for 5 minutes",
-                "ComparisonOperator": "LessThanThreshold",
-                "Dimensions": [{
-                    "Name": "AutoScalingGroup",
-                    "Value": {
-                        "Ref": "ASG"
-                    }
-                }],
-                "EvaluationPeriods": "2",
-                "MetricName": "CPUUtilization",
-                "Namespace": "AWS/EC2",
-                "Period": "300",
-                "Statistic": "Average",
-                "Threshold": "70"
-            },
-            "Type": "AWS::CloudWatch::Alarm"
-        },
         "ELBPROPERTIES": {
             "Properties": {
                 "ConnectionSettings": {
@@ -208,21 +133,9 @@
                     "InstanceProtocol": "HTTP",
                     "LoadBalancerPort": "80",
                     "Protocol": "HTTP"
-                },
-                {
-                    "InstancePort": "8086",
-                    "InstanceProtocol": "HTTP",
-                    "LoadBalancerPort": "8086",
-                    "Protocol": "HTTP"
-                    },
-                {
-                    "InstancePort": "8083",
-                    "InstanceProtocol": "HTTP",
-                    "LoadBalancerPort": "8083",
-                    "Protocol": "HTTP"
-                        }],
+                }],
                 "LoadBalancerName": {
-                    "Fn::Join" : [ "-", [ "dotify-elb", {"Ref": "TeamName"}, "elb" ]]
+                    "Ref": "ELBName"
                 },
                 "Scheme": "internal",
                 "SecurityGroups": {
@@ -232,16 +145,6 @@
                     "Ref": "ELBSubnets"
                 },
                 "Tags": [{
-                    "Key": "CMDBEnvironment",
-                    "Value": {
-                        "Ref": "CMDBEnvironment"
-                    }
-                }, {
-                    "Key": "ASV",
-                    "Value": {
-                        "Ref": "ASV"
-                    }
-                }, {
                     "Key": "OwnerContact",
                     "Value": {
                         "Ref": "OwnerContact"
@@ -250,7 +153,6 @@
 
             },
             "Type": "AWS::ElasticLoadBalancing::LoadBalancer"
-
         },
         "LaunchConfig": {
             "Properties": {
@@ -260,12 +162,6 @@
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
-                },
-                "IamInstanceProfile": {
-                    "Ref": "IAMROLE"
-                },
-                "KeyName": {
-                    "Ref": "KeyPairName"
                 },
                 "SecurityGroups": {
                     "Ref": "SecurityGroups"
@@ -280,72 +176,6 @@
                 }
             },
             "Type": "AWS::AutoScaling::LaunchConfiguration"
-        },
-        "LoadBalancerDropAlarm": {
-            "Properties": {
-                "AlarmActions": [{
-                    "Ref": "AlertTopic"
-                }],
-                "AlarmDescription": "ELB Queue dropped requests",
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [{
-                    "Name": "SurgeQueueLength",
-                    "Value": {
-                        "Ref": "ELBPROPERTIES"
-                    }
-                }],
-                "EvaluationPeriods": "1",
-                "MetricName": "SpilloverCount",
-                "Namespace": "AWS/ELB",
-                "Period": "300",
-                "Statistic": "Sum",
-                "Threshold": "512"
-            },
-            "Type": "AWS::CloudWatch::Alarm"
-        },
-        "LoadBalancerLatencyAlarm": {
-            "Properties": {
-                "AlarmActions": [{
-                    "Ref": "AlertTopic"
-                }],
-                "AlarmDescription": "ELB Backend Latency",
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [{
-                    "Name": "Latency",
-                    "Value": {
-                        "Ref": "ELBPROPERTIES"
-                    }
-                }],
-                "EvaluationPeriods": "2",
-                "MetricName": "Latency",
-                "Namespace": "AWS/ELB",
-                "Period": "60",
-                "Statistic": "Average",
-                "Threshold": "2"
-            },
-            "Type": "AWS::CloudWatch::Alarm"
-        },
-        "LoadBalancerQueueAlarm": {
-            "Properties": {
-                "AlarmActions": [{
-                    "Ref": "AlertTopic"
-                }],
-                "AlarmDescription": "ELB Queue overloaded",
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [{
-                    "Name": "SurgeQueueLength",
-                    "Value": {
-                        "Ref": "ELBPROPERTIES"
-                    }
-                }],
-                "EvaluationPeriods": "2",
-                "MetricName": "SurgeQueueLength",
-                "Namespace": "AWS/ELB",
-                "Period": "300",
-                "Statistic": "Maximum",
-                "Threshold": "1024"
-            },
-            "Type": "AWS::CloudWatch::Alarm"
         },
         "ASG": {
             "Properties": {
@@ -376,41 +206,10 @@
                     }
                 },
                 "Tags": [{
-                    "Key": "Name",
-                    "PropagateAtLaunch": true,
-                    "Value": {
-                        "Fn::Join" : [ "-", [ "dotify", {"Ref": "TeamName"} ]]
-                    }
-                }, {
-                    "Key": "CMDBEnvironment",
-                    "PropagateAtLaunch": true,
-                    "Value": {
-                        "Ref": "CMDBEnvironment"
-                    }
-                }, {
-                    "Key": "ASV",
-                    "PropagateAtLaunch": true,
-                    "Value": {
-                        "Ref": "ASV"
-                    }
-                }, {
                     "Key": "OwnerContact",
                     "PropagateAtLaunch": true,
                     "Value": {
                         "Ref": "OwnerContact"
-                    }
-                },{
-                    "Key": "TeamName",
-                    "PropagateAtLaunch": true,
-                    "Value": {
-                        "Ref": "TeamName"
-                    }
-                }
-                , {
-                        "Key": "ScheduledHours",
-                                        "PropagateAtLaunch": true,
-                    "Value": {
-                        "Ref": "ScheduledHours"
                     }
                 }],
                 "VPCZoneIdentifier": {
@@ -421,38 +220,3 @@
         }
     }
   }
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-
-
