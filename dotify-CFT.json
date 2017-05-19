@@ -1,0 +1,458 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Generic ELB-ASG Stack",
+    "Outputs": {
+        "LoadBalancers": {
+            "Description": "Elastic Load Balancer URL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ELBPROPERTIES",
+                    "DNSName"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "AMI": {
+            "Default": "ami-c58c1dd3",
+            "Description": "COF Hardened AMI(https://pulse.kdc.capitalone.com/docs/DOC-80886)",
+            "Type": "String"
+        },
+        "IAMROLE": {
+            "Default": "arn:aws:iam::587550370132:role/IAMRole-Hackathon",
+            "Description": "IAM Instance Profile Role.",
+            "Type": "String"
+        },
+        "AlertTopic": {
+            "Default": "arn:aws:sns:us-east-1:587550370132:Hackathon",
+            "Description": "Arn for SNS Topic to use for Alerts",
+            "Type": "String"
+        },
+        "AvailabilityZones": {
+            "Default": "us-east-1a,us-east-1b,us-east-1c",
+            "Description": "Comma separated list of availability zones for DB Tier (MUST MATCH Subnets Parameter)",
+            "Type": "CommaDelimitedList"
+        },
+        "OwnerContact": {
+            "Default": "Stephen/Russell",
+            "Description": "Who is the OwnerContact",
+            "Type": "String"
+        },
+        "BucketPrefix": {
+            "Default": "bucket-hackathon",
+            "Description": "Bucket and prefix for this prototype or POC",
+            "Type": "String"
+        },
+        "InstanceType": {
+            "AllowedValues": [
+                "t2.micro",
+                "t2.medium",
+                "m3.medium",
+        "m3.large",
+        "m3.xlarge",
+        "m4.large",
+        "m4.xlarge",
+        "m4.2xlarge"
+         ],
+            "Default": "t2.micro",
+            "Description": "Size of instance",
+            "Type": "String"
+        },
+        "KeyPairName": {
+            "Default": "keypair-hackathon",
+            "Description": "Name of an existing EC2 KeyPair to enable SSH accessto the instances (use bastion KeyPair if available)",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "SecurityGroups": {
+            "Default": "sg-fb387b85",
+            "Description": "Comma separated list of security groups to apply to instances.",
+            "Type": "CommaDelimitedList"
+        },
+        "ELBSubnets": {
+            "Default": "subnet-97c69bab",
+            "Description": "Comma separate list of subnets (AT LEAST 3) to use for DB Tier",
+            "Type": "CommaDelimitedList"
+        },
+        "PoolSubnets": {
+            "Default": "subnet-97c69bab",
+            "Description": "Comma separate list of subnets (AT LEAST 3) to use for DB Tier",
+            "Type": "CommaDelimitedList"
+        },
+
+        "InstanceName": {
+            "Default": "dotify-ec2",
+            "Description": "Name of instances in AWS",
+            "Type": "String"
+        },
+        "ELBName": {
+            "Default": "dotify-elb",
+            "Description": "Name of ELB Resource in AWS",
+            "Type": "String"
+        },
+        "ASGMaxSize": {
+            "Default": "1",
+            "Description": "Maximum size of Autoscaling group",
+            "Type": "String"
+        },
+        "ASGDesiredSize": {
+            "Default": "1",
+            "Description": "Desired size of Autoscaling group",
+            "Type": "String"
+        },
+        "ASGMinSize": {
+            "Default": "1",
+            "Description": "Minimum size of Autoscaling group",
+            "Type": "String"
+        },
+        "ScheduledHours": {
+                "AllowedValues": [
+                "USDaytime",
+                "24x7",
+                "Offshore"
+            ],
+                "Default": "USDaytime",
+            "Description": "Scheduled Hours",
+            "Type": "String"
+        },
+        "HealthCheck": {
+            "Default": "TCP:22",
+            "Description": "Heath Check for instances",
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "ASGCpuHighAlarm": {
+            "Properties": {
+                "AlarmActions": [{
+                    "Ref": "ASGScaleUpPolicy"
+                }],
+                "AlarmDescription": "Scale up if CPU > 80% average over 5 minutes",
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [{
+                    "Name": "AutoScalingGroup",
+                    "Value": {
+                        "Ref": "ASG"
+                    }
+                }],
+                "EvaluationPeriods": 1,
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Period": 300,
+                "Statistic": "Average",
+                "Threshold": "80"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "ASGScaleDownPolicy": {
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ASG"
+                },
+                "Cooldown": 60,
+                "ScalingAdjustment": "-1"
+            },
+            "Type": "AWS::AutoScaling::ScalingPolicy"
+        },
+        "ASGScaleUpPolicy": {
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ASG"
+                },
+                "Cooldown": 60,
+                "ScalingAdjustment": "1"
+            },
+            "Type": "AWS::AutoScaling::ScalingPolicy"
+        },
+        "CPUAlarmLow": {
+            "Properties": {
+                "AlarmActions": [{
+                    "Ref": "ASGScaleDownPolicy"
+                }],
+                "AlarmDescription": "Scale-down if CPU < 70% for 5 minutes",
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [{
+                    "Name": "AutoScalingGroup",
+                    "Value": {
+                        "Ref": "ASG"
+                    }
+                }],
+                "EvaluationPeriods": "2",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Period": "300",
+                "Statistic": "Average",
+                "Threshold": "70"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "ELBPROPERTIES": {
+            "Properties": {
+                "ConnectionSettings": {
+                    "IdleTimeout": 1800
+                },
+                "CrossZone": "true",
+                "HealthCheck": {
+                    "HealthyThreshold": "2",
+                    "Interval": 10,
+                    "Target": {
+                            "Ref": "HealthCheck"
+                    },
+                    "Timeout": "5",
+                    "UnhealthyThreshold": "10"
+                },
+                "Instances": [],
+                "Listeners": [{
+                    "InstancePort": "80",
+                    "InstanceProtocol": "HTTP",
+                    "LoadBalancerPort": "80",
+                    "Protocol": "HTTP"
+                },
+                {
+                    "InstancePort": "8086",
+                    "InstanceProtocol": "HTTP",
+                    "LoadBalancerPort": "8086",
+                    "Protocol": "HTTP"
+                    },
+                {
+                    "InstancePort": "8083",
+                    "InstanceProtocol": "HTTP",
+                    "LoadBalancerPort": "8083",
+                    "Protocol": "HTTP"
+                        }],
+                "LoadBalancerName": {
+                    "Fn::Join" : [ "-", [ "dotify-elb", {"Ref": "TeamName"}, "elb" ]]
+                },
+                "Scheme": "internal",
+                "SecurityGroups": {
+                    "Ref": "SecurityGroups"
+                },
+                "Subnets": {
+                    "Ref": "ELBSubnets"
+                },
+                "Tags": [{
+                    "Key": "CMDBEnvironment",
+                    "Value": {
+                        "Ref": "CMDBEnvironment"
+                    }
+                }, {
+                    "Key": "ASV",
+                    "Value": {
+                        "Ref": "ASV"
+                    }
+                }, {
+                    "Key": "OwnerContact",
+                    "Value": {
+                        "Ref": "OwnerContact"
+                    }
+                }]
+
+            },
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer"
+
+        },
+        "LaunchConfig": {
+            "Properties": {
+                "AssociatePublicIpAddress": "false",
+                "ImageId": {
+                    "Ref": "AMI"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "IAMROLE"
+                },
+                "KeyName": {
+                    "Ref": "KeyPairName"
+                },
+                "SecurityGroups": {
+                    "Ref": "SecurityGroups"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "\n", [
+                            " "]
+                        ]
+                    }
+                }
+            },
+            "Type": "AWS::AutoScaling::LaunchConfiguration"
+        },
+        "LoadBalancerDropAlarm": {
+            "Properties": {
+                "AlarmActions": [{
+                    "Ref": "AlertTopic"
+                }],
+                "AlarmDescription": "ELB Queue dropped requests",
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [{
+                    "Name": "SurgeQueueLength",
+                    "Value": {
+                        "Ref": "ELBPROPERTIES"
+                    }
+                }],
+                "EvaluationPeriods": "1",
+                "MetricName": "SpilloverCount",
+                "Namespace": "AWS/ELB",
+                "Period": "300",
+                "Statistic": "Sum",
+                "Threshold": "512"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "LoadBalancerLatencyAlarm": {
+            "Properties": {
+                "AlarmActions": [{
+                    "Ref": "AlertTopic"
+                }],
+                "AlarmDescription": "ELB Backend Latency",
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [{
+                    "Name": "Latency",
+                    "Value": {
+                        "Ref": "ELBPROPERTIES"
+                    }
+                }],
+                "EvaluationPeriods": "2",
+                "MetricName": "Latency",
+                "Namespace": "AWS/ELB",
+                "Period": "60",
+                "Statistic": "Average",
+                "Threshold": "2"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "LoadBalancerQueueAlarm": {
+            "Properties": {
+                "AlarmActions": [{
+                    "Ref": "AlertTopic"
+                }],
+                "AlarmDescription": "ELB Queue overloaded",
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [{
+                    "Name": "SurgeQueueLength",
+                    "Value": {
+                        "Ref": "ELBPROPERTIES"
+                    }
+                }],
+                "EvaluationPeriods": "2",
+                "MetricName": "SurgeQueueLength",
+                "Namespace": "AWS/ELB",
+                "Period": "300",
+                "Statistic": "Maximum",
+                "Threshold": "1024"
+            },
+            "Type": "AWS::CloudWatch::Alarm"
+        },
+        "ASG": {
+            "Properties": {
+                "AvailabilityZones": {
+                    "Ref": "AvailabilityZones"
+                },
+                "DesiredCapacity": 1,
+                "HealthCheckGracePeriod": 300,
+                "HealthCheckType": "ELB",
+                "LaunchConfigurationName": {
+                    "Ref": "LaunchConfig"
+                },
+                "LoadBalancerNames": [{
+                    "Ref": "ELBPROPERTIES"
+                }],
+                "MaxSize": "2",
+                "MinSize": "1",
+
+                "NotificationConfiguration": {
+                    "NotificationTypes": [
+                        "autoscaling:EC2_INSTANCE_LAUNCH",
+                        "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                        "autoscaling:EC2_INSTANCE_TERMINATE",
+                        "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+                    ],
+                    "TopicARN": {
+                        "Ref": "AlertTopic"
+                    }
+                },
+                "Tags": [{
+                    "Key": "Name",
+                    "PropagateAtLaunch": true,
+                    "Value": {
+                        "Fn::Join" : [ "-", [ "dotify", {"Ref": "TeamName"} ]]
+                    }
+                }, {
+                    "Key": "CMDBEnvironment",
+                    "PropagateAtLaunch": true,
+                    "Value": {
+                        "Ref": "CMDBEnvironment"
+                    }
+                }, {
+                    "Key": "ASV",
+                    "PropagateAtLaunch": true,
+                    "Value": {
+                        "Ref": "ASV"
+                    }
+                }, {
+                    "Key": "OwnerContact",
+                    "PropagateAtLaunch": true,
+                    "Value": {
+                        "Ref": "OwnerContact"
+                    }
+                },{
+                    "Key": "TeamName",
+                    "PropagateAtLaunch": true,
+                    "Value": {
+                        "Ref": "TeamName"
+                    }
+                }
+                , {
+                        "Key": "ScheduledHours",
+                                        "PropagateAtLaunch": true,
+                    "Value": {
+                        "Ref": "ScheduledHours"
+                    }
+                }],
+                "VPCZoneIdentifier": {
+                    "Ref": "PoolSubnets"
+                }
+            },
+            "Type": "AWS::AutoScaling::AutoScalingGroup"
+        }
+    }
+  }
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
