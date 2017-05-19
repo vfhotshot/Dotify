@@ -29,7 +29,7 @@
             "Type": "String"
         },
         "AvailabilityZones": {
-            "Default": "us-east-1a,us-east-1b,us-east-1c",
+            "Default": "us-east-1e",
             "Description": "Comma separated list of availability zones for DB Tier (MUST MATCH Subnets Parameter)",
             "Type": "CommaDelimitedList"
         },
