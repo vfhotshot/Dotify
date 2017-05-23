@@ -75,7 +75,13 @@ def say_funny():
                  'Who is Tim? Do you mean Bryan?',
                  'What happens in the circle stays in the circle.',
                  'Tim is out hunting down S 3 policy violators.',
-                 'In Soviet Russia, stack rehydrates Tim'
+                 'In Soviet Russia, stack rehydrates Tim',
+                 'Tim will create a swim lane for that.',
+                 'Tim has altered the deal. Pray that he does not alter it further.',
+                 'Tim says Loki approves.',
+                 'You are killing me smalls',
+                 'There are no dumb questions, only dumb people',
+                 'Very good, you have passed the test'
                  ]
     return random.choice(responses)
 
