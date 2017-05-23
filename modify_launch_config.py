@@ -3,11 +3,13 @@
 import base64
 import boto3
 import json
+import time
+import os
 
 # global vars
 ASG_CLIENT = boto3.client('autoscaling')
 S3_CLIENT = boto3.client('s3')
-
+LAMBDA_CLIENT = boto3.client('lambda')
 
 def get_ami_for_asg(asg_id):
     """Called by set_bounce_amis to find the AMI ID for an ASG.
@@ -41,7 +43,6 @@ def get_ami_for_asg(asg_id):
         'desired_capacity': desired_capacity
     }
 
-
 def update_lc(results, asg_name, latest_ami):
     """Create a new Launch Configuration, associate it with the AutoScaling Group,
     and Delete the old one"""
@@ -50,8 +51,10 @@ def update_lc(results, asg_name, latest_ami):
     launch_config = results['lc']
     curr_lc_name = results['lc_name']
     curr_asg_ami = results['ami']
-
-    new_lc_name = 'launch-config-' + asg_name + '-' + latest_ami
+    
+    ticks = time.time()
+    
+    new_lc_name = 'launch-config-' + asg_name + '-' + str(ticks)
 
     # Check if ASG update is needed
     if curr_lc_name == new_lc_name and curr_asg_ami == latest_ami:
@@ -118,36 +121,37 @@ def get_data(key, obj_json):
         return obj_json[key]
     return ''
 
+def call_refresh(asg_name):
+    
+    event_payload = {'asg': asg_name, 'call_action': 'scale_up'}
+    invokeResponse = LAMBDA_CLIENT.invoke(
+        FunctionName='refresh_instances',
+        InvocationType='RequestResponse',
+        LogType='Tail',
+        Payload=json.dumps(event_payload)
+    )
+    return invokeResponse
 
 # This is the entry point for the Lambda
 def modify_lc(event, context):
     """Main entrypoint for library.
     event and context parameters currently ignored, but exist to meet lambda interface."""
 
-    bucket = ''
-    key = ''
     auto_scale_group = ''
-    latest_ami = ''
 
     curr_min = 0
 
-    # Get filename from S3
-    for record in event['Records']:
-        bucket = record['s3']['bucket']['name']
-        key = record['s3']['object']['key']
-        print bucket + ": " + key
-
-    if bucket and key:
-        obj_json = get_s3_obj_data(bucket, key)
-
-        auto_scale_group = get_data('asg', obj_json)
-        latest_ami = get_data('ami_id', obj_json)
-        curr_min = get_data('min', obj_json)
-
-        print auto_scale_group + ": " + latest_ami
-
-    # auto_scale_group = event['asg']
-    # latest_ami = event['ami_id']
+    # Should be ASG name
+    auto_scale_group = event['stack']
+    print auto_scale_group
+    
+    #Send text approval request
+    os.system("curl -X POST -H 'Content-Type: application/json' -d '{\"value1\":\""+ auto_scale_group + "\"}' https://maker.ifttt.com/trigger/approval-request/with/key/cTQ8Wc2oHssQsfV_0hN5Fj")
+    
+    # Send Starting Slack Notification
+    os.system("curl -X POST --data-urlencode 'payload={\"channel\": \"#dotify\", \"username\": \"Tim-Bot\", \"text\": \"Refreshing DotifyA stack...\", \"icon_emoji\": \":thumbsup:\"}' https://hooks.slack.com/services/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")
+    
+    latest_ami = 'ami-c58c1dd3'
     if not latest_ami:
         print "Could not find ami_id input"
         return None
@@ -158,6 +162,10 @@ def modify_lc(event, context):
 
     if update_lc(results, auto_scale_group, latest_ami):
         print "ASG updated with new LC"
+        # Call Refresh
+        call_refresh(auto_scale_group)
     else:
         print "ASG not updated"
+    
+    
     return None
